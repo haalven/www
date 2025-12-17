@@ -2,10 +2,13 @@
 
 # HTTP(S) Request / Response investigation
 
+
 import sys, pathlib, argparse
-import socket, http.client, ssl, urllib.parse
+import socket, http.client, ssl, urllib.parse, getpass
 from cryptography import x509
+from base64 import b64encode
 from html.parser import HTMLParser
+
 
 # some settings
 schemes = ['http','https']
@@ -15,8 +18,12 @@ useragents = {
     'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1',
     'foobar': 'FooBar/1.0',
 }
+auth_domain = ''
+auth_id = ''
+auth_passphrase = getpass.getpass(f'passphrase:')
 socket.setdefaulttimeout(5)
 socket.has_ipv6 = False
+
 
 # ANSI SGR formatting sequences
 def f(code) -> str: return '\x1b[' + str(code) + 'm'
@@ -71,6 +78,7 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         # headers
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
+        # never send Authorization header without encryption!
         print_item(('Headers', request_headers))
         # the request
         #connection.set_debuglevel(1)
@@ -78,9 +86,11 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
     except KeyboardInterrupt:
-        sys.exit(f(31) + 'KeyboardInterrupt' + f(39))
+        warn('KeyboardInterrupt')
+        sys.exit(1)
     except Exception as e:
-        sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
+        warn('Connection error: ' + str(e))
+        sys.exit(1)
 
 # do an HTTPS request to location
 def https_request(location:dict) -> http.client.HTTPResponse:
@@ -105,22 +115,32 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         # certificate
         der_cert = connection.sock.getpeercert(binary_form=True)
-        if der_cert: # parse and print
-            cert = x509.load_der_x509_certificate(der_cert)
-            print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
-            print_item(('Subject', cert.subject.rfc4514_string()))
-            print_item(('Issuer', cert.issuer.rfc4514_string()))
-            print_item(('Not-after', str(cert.not_valid_after_utc)))
+        if not (der_cert):
+            warn('certificate error!')
+            sys.exit(1)
+        cert = x509.load_der_x509_certificate(der_cert)
+        print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
+        print_item(('Subject', cert.subject.rfc4514_string()))
+        print_item(('Issuer', cert.issuer.rfc4514_string()))
+        print_item(('Not-after', str(cert.not_valid_after_utc)))
         # request headers
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
+        # Authorization
+        if auth_domain.strip() and (auth_domain in cert.subject.rfc4514_string()) and auth_id and auth_passphrase:
+            credentials = f'{auth_id}:{auth_passphrase}'
+            b64 = b64encode(credentials.encode('ascii'))
+            request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
+        print_item(('Request-Headers', request_headers))
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
     except KeyboardInterrupt:
-        sys.exit(f(31) + 'KeyboardInterrupt' + f(39))
+        warn('KeyboardInterrupt')
+        sys.exit(1)
     except Exception as e:
-        sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
+        warn('Connection error: ' + str(e))
+        sys.exit(1)
 
 # title and meta parser
 class TitleParser(HTMLParser):
