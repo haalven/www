@@ -20,7 +20,8 @@ useragents = {
 }
 auth_domain = ''
 auth_id = ''
-auth_passphrase = getpass.getpass(f'passphrase:')
+auth_passphrase = ''
+#auth_passphrase = getpass.getpass(f'passphrase:')
 socket.setdefaulttimeout(5)
 socket.has_ipv6 = False
 
@@ -115,22 +116,24 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         # certificate
         der_cert = connection.sock.getpeercert(binary_form=True)
-        if not (der_cert):
-            warn('certificate error!')
-            sys.exit(1)
-        cert = x509.load_der_x509_certificate(der_cert)
-        print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
-        print_item(('Subject', cert.subject.rfc4514_string()))
-        print_item(('Issuer', cert.issuer.rfc4514_string()))
-        print_item(('Not-after', str(cert.not_valid_after_utc)))
+        cert = ''
+        if der_cert:
+            cert = x509.load_der_x509_certificate(der_cert)
+            print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
+            print_item(('Subject', cert.subject.rfc4514_string()))
+            print_item(('Issuer', cert.issuer.rfc4514_string()))
+            print_item(('Not-after', str(cert.not_valid_after_utc)))
+        else:
+            warn('certificate error: no certificate?!')
         # request headers
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
         # Authorization
-        if auth_domain.strip() and (auth_domain in cert.subject.rfc4514_string()) and auth_id and auth_passphrase:
-            credentials = f'{auth_id}:{auth_passphrase}'
-            b64 = b64encode(credentials.encode('ascii'))
-            request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
+        if cert and auth_domain.strip() and auth_id and auth_passphrase:
+            if auth_domain in cert.subject.rfc4514_string():
+                credentials = f'{auth_id}:{auth_passphrase}'
+                b64 = b64encode(credentials.encode('ascii'))
+                request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
         print_item(('Request-Headers', request_headers))
         # the request
         connection.request('GET', location['path'], headers=request_headers)
