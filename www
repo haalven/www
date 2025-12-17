@@ -80,7 +80,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        print_item(('SSL-context', ctx))
+        #print_item(('SSL-context', ctx))
         # connection object
         connection = http.client.HTTPSConnection(location['host'],
                                                 location['port'],
