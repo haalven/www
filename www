@@ -68,7 +68,7 @@ def ask_location() -> dict:
 # do an HTTP request to location
 def http_request(location:dict) -> http.client.HTTPResponse:
     try:
-        print_item(('location', location))
+        print_item(('Location', location))
         # do DNS resolution
         ip = socket.gethostbyname(location['host'])
         print_item(('DNS-resolution', ip))
@@ -76,14 +76,17 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         connection = http.client.HTTPConnection(location['host'],
                                                 location['port'])
         print_item(('Connection-Obj', connection))
-        # headers
+        # request headers
+        print(f(3)+f(4) + 'Request headers:' + f(24)+f(23))
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
         # never send Authorization header without encryption!
-        print_item(('Headers', request_headers))
+        for request_header in request_headers:
+            print_item((request_header, request_headers[request_header]))
         # the request
         #connection.set_debuglevel(1)
         connection.request('GET', location['path'], headers=request_headers)
+        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
     except KeyboardInterrupt:
@@ -96,7 +99,7 @@ def http_request(location:dict) -> http.client.HTTPResponse:
 # do an HTTPS request to location
 def https_request(location:dict) -> http.client.HTTPResponse:
     try:
-        print_item(('location', location))
+        print_item(('Location', location))
         # do DNS resolution
         ip = socket.gethostbyname(location['host'])
         print_item(('DNS-resolution', ip))
@@ -113,6 +116,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         # ssl-connection
         #connection.set_debuglevel(1)
         connection.connect()
+        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         # certificate
         der_cert = connection.sock.getpeercert(binary_form=True)
@@ -126,15 +130,16 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         else:
             warn('certificate error: no certificate?!')
         # request headers
+        print(f(3)+f(4) + 'Request headers:' + f(24)+f(23))
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
-        # Authorization
         if cert and cert_subj_str and auth_id and auth_passphrase:
             if cert_subj_str == cert.subject.rfc4514_string():
                 credentials = f'{auth_id}:{auth_passphrase}'
                 b64 = b64encode(credentials.encode('ascii'))
                 request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
-        print_item(('Request-Headers', request_headers))
+        for request_header in request_headers:
+            print_item((request_header, request_headers[request_header]))
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
