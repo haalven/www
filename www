@@ -15,6 +15,8 @@ useragents = {
     'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1',
     'foobar': 'FooBar/1.0',
 }
+socket.setdefaulttimeout(5)
+socket.has_ipv6 = False
 
 # ANSI SGR formatting sequences
 def f(code) -> str: return '\x1b[' + str(code) + 'm'
@@ -58,34 +60,45 @@ def ask_location() -> dict:
 # do an HTTP request to location
 def http_request(location:dict) -> http.client.HTTPResponse:
     try:
+        print_item(('location', location))
+        # do DNS resolution
+        ip = socket.gethostbyname(location['host'])
+        print_item(('DNS-resolution', ip))
         # connection object
         connection = http.client.HTTPConnection(location['host'],
                                                 location['port'])
-        #print_item(('Connection-Obj', connection))
+        print_item(('Connection-Obj', connection))
         # headers
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
+        print_item(('Headers', request_headers))
         # the request
         #connection.set_debuglevel(1)
         connection.request('GET', location['path'], headers=request_headers)
         print_item(('Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
+    except KeyboardInterrupt:
+        sys.exit(f(31) + 'KeyboardInterrupt' + f(39))
     except Exception as e:
         sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
 
 # do an HTTPS request to location
 def https_request(location:dict) -> http.client.HTTPResponse:
     try:
+        print_item(('location', location))
+        # do DNS resolution
+        ip = socket.gethostbyname(location['host'])
+        print_item(('DNS-resolution', ip))
         # ssl context
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        #print_item(('SSL-context', ctx))
+        print_item(('SSL-context', ctx))
         # connection object
         connection = http.client.HTTPSConnection(location['host'],
                                                 location['port'],
                                                 context=ctx)
-        #print_item(('Connection-Obj', connection))
+        print_item(('Connection-Obj', connection))
         # ssl-connection
         #connection.set_debuglevel(1)
         connection.connect()
@@ -104,6 +117,8 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
+    except KeyboardInterrupt:
+        sys.exit(f(31) + 'KeyboardInterrupt' + f(39))
     except Exception as e:
         sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
 
@@ -167,9 +182,6 @@ def main() -> int:
         print(f'{f(1)}Requesting: {f(4)}{new_url}{f(24)}{f(22)}')
         print(f(1) + 60*'—' + f(22))
         print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
-        # do DNS resolution
-        ip = socket.gethostbyname(location['host'])
-        print_item(('DNS-resolution', ip))
         # do request, get response
         if location['scheme'] == 'http':
             response = http_request(location)
