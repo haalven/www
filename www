@@ -18,7 +18,7 @@ useragents = {
     'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1',
     'foobar': 'FooBar/1.0',
 }
-auth_domain = ''
+cert_subj_str = ''
 auth_id = ''
 auth_passphrase = ''
 #auth_passphrase = getpass.getpass(f'passphrase:')
@@ -129,8 +129,8 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
         # Authorization
-        if cert and auth_domain.strip() and auth_id and auth_passphrase:
-            if auth_domain in cert.subject.rfc4514_string():
+        if cert and cert_subj_str and auth_id and auth_passphrase:
+            if cert_subj_str == cert.subject.rfc4514_string():
                 credentials = f'{auth_id}:{auth_passphrase}'
                 b64 = b64encode(credentials.encode('ascii'))
                 request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
