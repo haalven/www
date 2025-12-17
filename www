@@ -3,7 +3,7 @@
 # HTTP(S) Request / Response investigation
 
 import sys, pathlib, argparse
-import http.client, ssl, urllib.parse
+import socket, http.client, ssl, urllib.parse
 from cryptography import x509
 from html.parser import HTMLParser
 
@@ -11,8 +11,8 @@ from html.parser import HTMLParser
 schemes = ['http','https']
 redirect_codes = [301, 302, 303, 307, 308]
 useragents = {
-    'Mac-Safari': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6.7 Safari/605.1.15',
-    'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
+    'Mac-Safari': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+    'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.2 Mobile/15E148 Safari/604.1',
     'foobar': 'FooBar/1.0',
 }
 
@@ -64,11 +64,11 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         #print_item(('Connection-Obj', connection))
         # headers
         request_headers = {}
-        request_headers['User-Agent'] = useragents['foobar']
+        request_headers['User-Agent'] = useragents['Mac-Safari']
         # the request
         #connection.set_debuglevel(1)
         connection.request('GET', location['path'], headers=request_headers)
-        print_item(('Server-IP', connection.sock.getpeername()[0]))
+        print_item(('Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
     except Exception as e:
         sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
@@ -89,7 +89,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         # ssl-connection
         #connection.set_debuglevel(1)
         connection.connect()
-        print_item(('Server-IP', connection.sock.getpeername()[0]))
+        print_item(('Real-Peername', connection.sock.getpeername()[0]))
         # certificate
         der_cert = connection.sock.getpeercert(binary_form=True)
         if der_cert: # parse and print
@@ -100,7 +100,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             print_item(('Not-after', str(cert.not_valid_after_utc)))
         # request headers
         request_headers = {}
-        request_headers['User-Agent'] = useragents['foobar']
+        request_headers['User-Agent'] = useragents['Mac-Safari']
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
@@ -167,6 +167,9 @@ def main() -> int:
         print(f'{f(1)}Requesting: {f(4)}{new_url}{f(24)}{f(22)}')
         print(f(1) + 60*'—' + f(22))
         print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
+        # do DNS resolution
+        ip = socket.gethostbyname(location['host'])
+        print_item(('DNS-resolution', ip))
         # do request, get response
         if location['scheme'] == 'http':
             response = http_request(location)
