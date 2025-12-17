@@ -1,0 +1,284 @@
+#! /usr/bin/env python3
+
+# HTTP(S) Request / Response investigation
+
+import sys, pathlib, argparse
+import http.client, ssl, urllib.parse
+from cryptography import x509
+from html.parser import HTMLParser
+
+# some settings
+schemes = ['http','https']
+redirect_codes = [301, 302, 303, 307, 308]
+useragents = {
+    'Mac-Safari': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6.7 Safari/605.1.15',
+    'iPhone-Safari': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1',
+    'foobar': 'FooBar/1.0',
+}
+
+# ANSI SGR formatting sequences
+def f(code) -> str: return '\x1b[' + str(code) + 'm'
+def c(code) -> str: return f('38;5;' + str(code))
+
+# warnings
+def warn(msg:str):
+    print(c(196) + str(msg) + f(39), file=sys.stderr)
+
+# print key:value pairs
+def print_item(item:tuple):
+    key, value = item
+    print(c(230) + str(key) + ':' + f(39), str(value))
+
+# parse arguments
+def get_arguments(my_name:str) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog=my_name)
+    parser.add_argument('URL',
+                        type=str,
+                        help='e. g. http://www.foobar.net:80/index.html')
+    return parser.parse_args()
+
+# ask for a target / location
+def ask_location() -> dict:
+    location = {'scheme':'', 'host':'', 'port':0, 'path':''}
+    while not (location['scheme'] in schemes):
+        location['scheme'] = input('Scheme: ').strip().lower()
+    while not location['host']:
+        location['host'] = input('Host: ').strip().lower()
+    while not location['port']:
+        try:
+            location['port'] = int(input('Port: ').strip())
+        except ValueError:
+            pass
+    location['path'] = input('Path: ').strip()
+    if not location['path']:
+        location['path'] = '/'
+    # return the dictionary
+    return location
+
+# do an HTTP request to location
+def http_request(location:dict) -> http.client.HTTPResponse:
+    try:
+        # connection object
+        connection = http.client.HTTPConnection(location['host'],
+                                                location['port'])
+        #print_item(('Connection-Obj', connection))
+        # headers
+        request_headers = {}
+        request_headers['User-Agent'] = useragents['foobar']
+        # the request
+        #connection.set_debuglevel(1)
+        connection.request('GET', location['path'], headers=request_headers)
+        print_item(('Server-IP', connection.sock.getpeername()[0]))
+        return connection.getresponse()
+    except Exception as e:
+        sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
+
+# do an HTTPS request to location
+def https_request(location:dict) -> http.client.HTTPResponse:
+    try:
+        # ssl context
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        print_item(('SSL-context', ctx))
+        # connection object
+        connection = http.client.HTTPSConnection(location['host'],
+                                                location['port'],
+                                                context=ctx)
+        #print_item(('Connection-Obj', connection))
+        # ssl-connection
+        #connection.set_debuglevel(1)
+        connection.connect()
+        print_item(('Server-IP', connection.sock.getpeername()[0]))
+        # certificate
+        der_cert = connection.sock.getpeercert(binary_form=True)
+        if der_cert: # parse and print
+            cert = x509.load_der_x509_certificate(der_cert)
+            print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
+            print_item(('Subject', cert.subject.rfc4514_string()))
+            print_item(('Issuer', cert.issuer.rfc4514_string()))
+            print_item(('Not-after', str(cert.not_valid_after_utc)))
+        # request headers
+        request_headers = {}
+        request_headers['User-Agent'] = useragents['foobar']
+        # the request
+        connection.request('GET', location['path'], headers=request_headers)
+        return connection.getresponse()
+    except Exception as e:
+        sys.exit(f(31) + 'Connection error: ' + str(e) + f(39))
+
+# title and meta parser
+class TitleParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.in_title = False
+        self.title, self.meta = ('', [])
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == 'title':
+            self.in_title = True
+        elif (tag.lower() == 'meta') and attrs:
+            self.meta.append(attrs)
+    def handle_endtag(self, tag):
+        if tag.lower() == 'title':
+            self.in_title = False
+    def handle_data(self, data):
+        if self.in_title:
+            self.title += data.strip()
+
+# main program
+def main() -> int:
+    # my path
+    my_path = pathlib.Path(__file__)
+    my_dir  = str(my_path.parent)
+    my_name = str(my_path.name)
+    # get url argument
+    argument = get_arguments(my_name)
+    url = str(argument.URL)
+    if not (url.lower().startswith('http://') or url.lower().startswith('https://')):
+        url = 'http://' + url
+    # parse url -> location dict
+    location_parsed = urllib.parse.urlparse(url)
+    location = {'scheme':'', 'host':'', 'port':0, 'path':''}
+    #scheme
+    if location_parsed.scheme:
+        location['scheme'] = location_parsed.scheme.lower()
+    else:
+        location['scheme'] = 'http'
+    # host and port
+    location['host'], _, port_string = location_parsed.netloc.partition(':')
+    if port_string: location['port'] = int(port_string)
+    elif location['scheme'] == 'http': location['port'] = 80
+    elif location['scheme'] == 'https': location['port'] = 443
+    # path
+    path = location_parsed.path if location_parsed.path else '/'
+    if location_parsed.query:
+        path += '?' + location_parsed.query
+    if location_parsed.fragment:
+        path += '#' + location_parsed.fragment
+    location['path'] = path
+
+    # ask for location
+    #location = ask_location()
+
+    # main loop
+    while True:
+        new_url = f'{location['scheme']}://{location['host']}:{location['port']}{location['path']}'
+        print('\n' + f(1) + 60*'—' + f(22))
+        print(f'{f(1)}Requesting: {f(4)}{new_url}{f(24)}{f(22)}')
+        print(f(1) + 60*'—' + f(22))
+        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
+        # do request, get response
+        if location['scheme'] == 'http':
+            response = http_request(location)
+        elif location['scheme'] == 'https':
+            response = https_request(location)
+        else:
+            warn('bad scheme: only http or https allowed')
+            return 1
+        # response version and statuscode
+        match response.version:
+            case 10: version = 'HTTP/1.0'
+            case 11: version = 'HTTP/1.1'
+            case _:  version = 'HTTP/' + str(response.version)
+        if response.status == 200: color = f(32) # green
+        elif response.status in redirect_codes: color = f(33) # yellow
+        else: color = f(31) # red
+        print(f'{color}>>> Response: {version} {response.status} {response.reason}{f(39)}')
+        # response headers
+        headers = response.getheaders()
+        print(f(3)+f(4) + 'Response Headers:' + f(24)+f(23))
+        for header in headers:
+            key, value = header
+            if key.lower() == 'set-cookie':
+                cookie, _, attributes = value.partition('; ')
+                cookie_name, _, cookie_value = cookie.partition('=')
+                new_value = cookie_name + '='
+                new_value += c(222)+cookie_value+f(39) + '; '
+                new_value += attributes
+                print_item((key, new_value))
+            else:
+                print_item((key, value))
+        # payload
+        payload = response.read()
+        if len(payload.strip()) > 1:
+            print(f(3)+f(4) + 'Payload (decoded):' + f(24)+f(24)+f(23))
+            try: text = payload.decode('utf-8')
+            except UnicodeDecodeError: 
+                try: text = payload.decode('latin-1')
+                except UnicodeDecodeError:
+                    warn('error decoding payload: unknown charset')
+                    return 1
+            if len(text) < 1024:
+                print( f(2) + str(text)  + f(22) )
+            else:
+                print( f(2) + str(text[:512]) + '…' + 2*'\n'
+                    + '…' + str(text[-512:]) + f(22))
+            # parse HTML payload
+            p = TitleParser()
+            p.feed(text)
+            # print title and meta tags
+            print(f(3)+f(4) + 'Parsed items:' + f(24)+f(23))
+            print_item(('Title', f(1) + p.title + f(22)))
+            for meta_tag in p.meta:
+                meta_line = ''
+                for meta_attr in meta_tag:
+                    meta_key, meta_value = meta_attr
+                    #print_item((meta_key, meta_value))
+                    meta_line += f'{c(230)}{meta_key}{f(39)}={meta_value} '
+                print_item(('Meta', meta_line))
+
+
+
+        # 200 OK
+        if response.status == 200:
+            return 0
+
+        # 3xx redirect
+        elif (response.status in redirect_codes) and response.getheader('location'):
+            response_location_parsed = urllib.parse.urlparse(str(response.getheader('location')))
+
+            # set the scheme
+            response_scheme = str(response_location_parsed.scheme).lower()
+            if response_scheme:
+                if response_scheme != location['scheme']:
+                    # server wants a different scheme
+                    if response_scheme in schemes:
+                        location['scheme'] = response_scheme
+                        # change the port also
+                        match response_scheme:
+                            case 'http':  location['port'] = 80
+                            case 'https': location['port'] = 443
+                    else:
+                        warn(f'scheme "{response_scheme}" not supported')
+                        return 1
+
+            # set the port
+            if response_location_parsed.port:
+                location['port'] = response_location_parsed.port
+            # port in netloc (www.foobar.net:8080)
+            if ':' in str(response_location_parsed.netloc):
+                _, __, location['port'] = str(response_location_parsed.netloc).partition(':')
+
+            # set the hostname
+            if response_location_parsed.hostname:
+                location['host'] = str(response_location_parsed.hostname).lower()
+
+            # set the path
+            if response_location_parsed.path:
+                path = str(response_location_parsed.path)
+                if not path.startswith('/'):
+                    path = '/' + path
+                if response_location_parsed.query:
+                    path += '?' + str(response_location_parsed.query)
+                if response_location_parsed.fragment:
+                    path += '#' + str(response_location_parsed.fragment)
+                location['path'] = path
+
+        # error statuscode?
+        else:
+            return 1
+
+    return 1
+
+if __name__ == '__main__':
+    sys.exit(main())
