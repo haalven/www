@@ -8,5 +8,6 @@ HTTP(S) &amp; HTML investigation with Python standard lib
 - auto HTTP forwarding
 - decodes and parses HTML title and meta tags
 - fake User-Agent
+- can process and return cookies
 
-usage: `$ www <URL>`
+usage: `$ www [--cookies] <URL>`
