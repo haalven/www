@@ -51,6 +51,7 @@ def print_item(item:tuple):
         last_cat = cat
     if  ((cat == 'Response headers') and (key.lower() =='location')) or \
         ((cat == 'Response headers') and (key.lower() =='server')) or \
+        ((cat == 'Response headers') and (key.lower() =='www-authenticate')) or \
         ((cat == 'Server certificate') and (key.lower() =='subject')) or \
         ((cat == 'Socket details') and (key.lower() =='real-peername')) or \
         ((cat == 'Response headers') and (key.lower() =='set-cookie')) or \
@@ -389,3 +390,4 @@ def main() -> int:
 
 if __name__ == '__main__':
     sys.exit(main())
+
