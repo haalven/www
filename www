@@ -4,10 +4,13 @@
 
 
 import sys, pathlib, argparse
-import socket, http.client, ssl, urllib.parse, getpass
+import http.client
+from http.cookies import SimpleCookie
+import socket, ssl, urllib.parse, getpass
 from cryptography import x509
 from base64 import b64encode
 from html.parser import HTMLParser
+from copy import deepcopy
 
 
 # some settings
@@ -24,6 +27,8 @@ auth_passphrase = ''
 #auth_passphrase = getpass.getpass(f'passphrase:')
 socket.setdefaulttimeout(5)
 socket.has_ipv6 = False
+last_cat = ''
+cookiedb = SimpleCookie()
 
 
 # ANSI SGR formatting sequences
@@ -36,8 +41,23 @@ def warn(msg:str):
 
 # print key:value pairs
 def print_item(item:tuple):
-    key, value = item
-    print(c(230) + str(key) + ':' + f(39), str(value))
+    global last_cat
+    if len(item) != 3:
+        warn('print_item syntax error: ' + str(item))
+        sys.exit(1)
+    cat, key, value = item
+    if cat != last_cat:
+        print('\n' + f(3)+f(4) + str(cat) + ':' + f(24)+f(23))
+        last_cat = cat
+    if  ((cat == 'Response headers') and (key.lower() =='location')) or \
+        ((cat == 'Response headers') and (key.lower() =='server')) or \
+        ((cat == 'Server certificate') and (key.lower() =='subject')) or \
+        ((cat == 'Socket details') and (key.lower() =='real-peername')) or \
+        ((cat == 'Response headers') and (key.lower() =='set-cookie')) or \
+        ((cat == 'Request headers') and (key.lower() =='cookie')):
+        print(c(228) + str(key) + ':' + f(39), str(value))
+    else:
+        print(c(230) + str(key) + ':' + f(39), str(value))
 
 # parse arguments
 def get_arguments(my_name:str) -> argparse.Namespace:
@@ -45,6 +65,10 @@ def get_arguments(my_name:str) -> argparse.Namespace:
     parser.add_argument('URL',
                         type=str,
                         help='e. g. http://www.foobar.net:80/index.html')
+    parser.add_argument('--cookies',
+                        action='store_true',
+                        required=False,
+                        help='send cookies')
     return parser.parse_args()
 
 # ask for a target / location
@@ -67,27 +91,29 @@ def ask_location() -> dict:
 
 # do an HTTP request to location
 def http_request(location:dict) -> http.client.HTTPResponse:
+    global cookiedb
     try:
-        print_item(('Location', location))
+        print_item(('Connection details', 'Target', location))
         # do DNS resolution
         ip = socket.gethostbyname(location['host'])
-        print_item(('DNS-resolution', ip))
+        print_item(('Connection details', 'DNS-resolution', ip))
         # connection object
         connection = http.client.HTTPConnection(location['host'],
                                                 location['port'])
-        print_item(('Connection-Obj', connection))
+        #print_item(('Connection details', 'Connection-Obj', connection))
         # request headers
-        print(f(3)+f(4) + 'Request headers:' + f(24)+f(23))
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
+        if cookiedb:
+            cookie_header = '; '.join(f'{m.key}={m.value}' for m in cookiedb.values())
+            request_headers['Cookie'] = cookie_header
         # never send Authorization header without encryption!
         for request_header in request_headers:
-            print_item((request_header, request_headers[request_header]))
+            print_item(('Request headers', request_header, request_headers[request_header]))
         # the request
         #connection.set_debuglevel(1)
         connection.request('GET', location['path'], headers=request_headers)
-        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
-        print_item(('Real-Peername', connection.sock.getpeername()[0]))
+        print_item(('Socket details', 'Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
     except KeyboardInterrupt:
         warn('KeyboardInterrupt')
@@ -98,48 +124,49 @@ def http_request(location:dict) -> http.client.HTTPResponse:
 
 # do an HTTPS request to location
 def https_request(location:dict) -> http.client.HTTPResponse:
+    global cookiedb
     try:
-        print_item(('Location', location))
+        print_item(('Connection details', 'Location', location))
         # do DNS resolution
         ip = socket.gethostbyname(location['host'])
-        print_item(('DNS-resolution', ip))
+        print_item(('Connection details', 'DNS-resolution', ip))
         # ssl context
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
-        print_item(('SSL-context', ctx))
+        print_item(('Connection details', 'SSL-context', ctx))
         # connection object
         connection = http.client.HTTPSConnection(location['host'],
                                                 location['port'],
                                                 context=ctx)
-        print_item(('Connection-Obj', connection))
+        #print_item(('Connection details', 'Connection-Obj', connection))
         # ssl-connection
         #connection.set_debuglevel(1)
         connection.connect()
-        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
-        print_item(('Real-Peername', connection.sock.getpeername()[0]))
+        print_item(('Socket details', 'Real-Peername', connection.sock.getpeername()[0]))
         # certificate
         der_cert = connection.sock.getpeercert(binary_form=True)
         cert = ''
         if der_cert:
             cert = x509.load_der_x509_certificate(der_cert)
-            print(f(3)+f(4) + 'Server Certificate:' + f(24)+f(23))
-            print_item(('Subject', cert.subject.rfc4514_string()))
-            print_item(('Issuer', cert.issuer.rfc4514_string()))
-            print_item(('Not-after', str(cert.not_valid_after_utc)))
+            print_item(('Server certificate', 'Subject', cert.subject.rfc4514_string()))
+            print_item(('Server certificate', 'Issuer', cert.issuer.rfc4514_string()))
+            print_item(('Server certificate', 'Not-after', str(cert.not_valid_after_utc)))
         else:
             warn('certificate error: no certificate?!')
         # request headers
-        print(f(3)+f(4) + 'Request headers:' + f(24)+f(23))
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
+        if cookiedb:
+            cookie_header = '; '.join(f'{m.key}={m.value}' for m in cookiedb.values())
+            request_headers['Cookie'] = cookie_header
         if cert and cert_subj_str and auth_id and auth_passphrase:
             if cert_subj_str == cert.subject.rfc4514_string():
                 credentials = f'{auth_id}:{auth_passphrase}'
                 b64 = b64encode(credentials.encode('ascii'))
                 request_headers['Authorization'] = f'Basic {b64.decode('ascii')}'
         for request_header in request_headers:
-            print_item((request_header, request_headers[request_header]))
+            print_item(('Request headers', request_header, request_headers[request_header]))
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
@@ -150,17 +177,38 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         warn('Connection error: ' + str(e))
         sys.exit(1)
 
-# title and meta parser
+# title, descr and meta parser
 class TitleParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.in_title = False
-        self.title, self.meta = ('', [])
+        self.in_descr = False
+        self.in_author = False
+        self.title = ''
+        self.descr = ''
+        self.author = ''
+        self.meta = []
     def handle_starttag(self, tag, attrs):
         if (tag.lower() == 'title') and (not self.title):
             self.in_title = True
         elif (tag.lower() == 'meta') and attrs:
             self.meta.append(attrs)
+            for attr in attrs:
+                key, value = attr
+                if (key.lower() == 'name') and value:
+                    if (value.lower() == 'description'):
+                        if not (self.in_descr):
+                            self.in_descr = True
+                    elif (value.lower() == 'author'):
+                        if not (self.in_author):
+                            self.in_author = True
+                elif (key.lower() == 'content') and value:
+                    if self.in_descr:
+                        self.descr = value.strip()
+                    elif self.in_author:
+                        self.author = value.strip()
+            self.in_descr = False
+            self.in_author = False
     def handle_endtag(self, tag):
         if tag.lower() == 'title':
             self.in_title = False
@@ -174,9 +222,9 @@ def main() -> int:
     my_path = pathlib.Path(__file__)
     my_dir  = str(my_path.parent)
     my_name = str(my_path.name)
-    # get url argument
-    argument = get_arguments(my_name)
-    url = str(argument.URL)
+    # get arguments
+    arguments = get_arguments(my_name)
+    url = str(arguments.URL)
     if not (url.lower().startswith('http://') or url.lower().startswith('https://')):
         url = 'http://' + url
     # parse url -> location dict
@@ -199,17 +247,20 @@ def main() -> int:
     if location_parsed.fragment:
         path += '#' + location_parsed.fragment
     location['path'] = path
+    last_location = ''
 
     # ask for location
     #location = ask_location()
 
     # main loop
     while True:
+        if location == last_location:
+            warn('STOP: new request with same location details as last request:')
+            print(location)
+            return 1
+        last_location = deepcopy(location)
         new_url = f'{location['scheme']}://{location['host']}:{location['port']}{location['path']}'
-        print('\n' + f(1) + 60*'—' + f(22))
-        print(f'{f(1)}Requesting: {f(4)}{new_url}{f(24)}{f(22)}')
-        print(f(1) + 60*'—' + f(22))
-        print(f(3)+f(4) + 'Connection status:' + f(24)+f(23))
+        print(f'\n\n\n{f(1)}> REQUEST {f(7)}{f(4)}{new_url}{f(24)}{f(27)}{f(22)}')
         # do request, get response
         if location['scheme'] == 'http':
             response = http_request(location)
@@ -226,25 +277,29 @@ def main() -> int:
         if response.status == 200: color = f(32) # green
         elif response.status in redirect_codes: color = f(33) # yellow
         else: color = f(31) # red
-        print(f'{color}>>> Response: {version} {response.status} {response.reason}{f(39)}')
+        print(f'\n\n{color}> RESPONSE {f(7)}{version} {response.status} {response.reason}{f(27)}{f(39)}')
         # response headers
         headers = response.getheaders()
-        print(f(3)+f(4) + 'Response Headers:' + f(24)+f(23))
         for header in headers:
             key, value = header
             if key.lower() == 'set-cookie':
+                if arguments.cookies:
+                    cookiedb.load(value)
                 cookie, _, attributes = value.partition('; ')
                 cookie_name, _, cookie_value = cookie.partition('=')
                 new_value = cookie_name + '='
-                new_value += c(222)+cookie_value+f(39) + '; '
+                new_value += cookie_value + '; '
                 new_value += attributes
-                print_item((key, new_value))
+                print_item(('Response headers', key, new_value))
             else:
-                print_item((key, value))
+                print_item(('Response headers', key, value))
+        if cookiedb:
+            for cookie_key, cookie_morsel in cookiedb.items():
+                print_item(('Stored cookies', cookie_key, f'{c(222)}{cookie_morsel.value}{f(39)}'))
         # payload
         payload = response.read()
         if len(payload.strip()) > 1:
-            print(f(3)+f(4) + 'Payload (decoded):' + f(24)+f(24)+f(23))
+            print('\n' + f(3)+f(4) + 'Payload (decoded):' + f(24)+f(23))
             try: text = payload.decode('utf-8')
             except UnicodeDecodeError: 
                 try: text = payload.decode('latin-1')
@@ -254,21 +309,28 @@ def main() -> int:
             if len(text) < 1024:
                 print( f(2) + str(text)  + f(22) )
             else:
-                print( f(2) + str(text[:512]) + '…' + 2*'\n'
-                    + '…' + str(text[-512:]) + f(22))
+                print( f(2) + str(text[:512]) + c(196)+'…'+f(39) + 2*'\n'
+                    + c(196)+'…'+f(39) + str(text[-512:]) + f(22))
             # parse HTML payload
             p = TitleParser()
             p.feed(text)
             # print title and meta tags
-            print(f(3)+f(4) + 'Parsed items:' + f(24)+f(23))
-            print_item(('Title', f(1) + p.title + f(22)))
+            title = p.title
+            while ('\t' in title):
+                title = title.replace('\t', 2 * '\x20')
+            while (3 * '\x20' in title):
+                title = title.replace(3 * '\x20', 2 * '\x20')
+            print_item(('Parsed items', 'Title', c(222) + title + f(39)))
+            if p.descr:
+                print_item(('Parsed items', 'Descr', f(3)+c(222) + p.descr + f(39)+f(23)))
+            if p.author:
+                print_item(('Parsed items', 'Author', c(222) + p.author + f(39)))
             for meta_tag in p.meta:
                 meta_line = ''
                 for meta_attr in meta_tag:
                     meta_key, meta_value = meta_attr
-                    #print_item((meta_key, meta_value))
                     meta_line += f'{c(230)}{meta_key}{f(39)}={meta_value} '
-                print_item(('Meta', meta_line))
+                print_item(('Meta tags', 'Meta', meta_line))
 
 
 
@@ -309,13 +371,15 @@ def main() -> int:
             # set the path
             if response_location_parsed.path:
                 path = str(response_location_parsed.path)
-                if not path.startswith('/'):
-                    path = '/' + path
-                if response_location_parsed.query:
-                    path += '?' + str(response_location_parsed.query)
-                if response_location_parsed.fragment:
-                    path += '#' + str(response_location_parsed.fragment)
-                location['path'] = path
+            else:
+                path = '/'
+            if not path.startswith('/'):
+                path = '/' + path
+            if response_location_parsed.query:
+                path += '?' + str(response_location_parsed.query)
+            if response_location_parsed.fragment:
+                path += '#' + str(response_location_parsed.fragment)
+            location['path'] = path
 
         # error statuscode?
         else:
