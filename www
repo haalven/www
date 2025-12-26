@@ -40,27 +40,6 @@ def c(code) -> str: return f('38;5;' + str(code))
 def warn(msg:str):
     print(c(196) + str(msg) + f(39), file=sys.stderr)
 
-# print key:value pairs
-def print_item(item:tuple):
-    global last_cat
-    if len(item) != 3:
-        warn('print_item syntax error: ' + str(item))
-        sys.exit(1)
-    cat, key, value = item
-    if cat != last_cat:
-        print('\n' + f(3)+f(4) + str(cat) + ':' + f(24)+f(23))
-        last_cat = cat
-    if  ((cat == 'Response headers') and (key.lower() =='location')) or \
-        ((cat == 'Response headers') and (key.lower() =='server')) or \
-        ((cat == 'Response headers') and (key.lower() =='www-authenticate')) or \
-        ((cat == 'Server certificate') and (key.lower() =='subject')) or \
-        ((cat == 'Socket details') and (key.lower() =='real-peername')) or \
-        ((cat == 'Response headers') and (key.lower() =='set-cookie')) or \
-        ((cat == 'Request headers') and (key.lower() =='cookie')):
-        print(c(228) + str(key) + ':' + f(39), str(value))
-    else:
-        print(c(230) + str(key) + ':' + f(39), str(value))
-
 # parse arguments
 def get_arguments(my_name:str) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=my_name)
@@ -76,6 +55,28 @@ def get_arguments(my_name:str) -> argparse.Namespace:
                         required=False,
                         help='do https')
     return parser.parse_args()
+
+# print key:value pairs
+def print_item(item:tuple):
+    global last_cat
+    if len(item) != 3:
+        warn('print_item() syntax error: ' + str(item))
+        sys.exit(1)
+    cat, key, value = item
+    if cat != last_cat:
+        print('\n' + f(3) + f(4) + str(cat) + ':' + f(24) + f(23))
+        last_cat = deepcopy(cat)
+    # highlighted items
+    if  ((cat == 'Response headers')   and (key.lower() =='location')) or \
+        ((cat == 'Response headers')   and (key.lower() =='server')) or \
+        ((cat == 'Response headers')   and (key.lower() =='www-authenticate')) or \
+        ((cat == 'Server certificate') and (key.lower() =='subject')) or \
+        ((cat == 'Socket details')     and (key.lower() =='real-peername')) or \
+        ((cat == 'Response headers')   and (key.lower() =='set-cookie')) or \
+        ((cat == 'Request headers')    and (key.lower() =='cookie')):
+        print(c(228) + str(key) + ':' + f(39), str(value))
+    else:
+        print(c(230) + str(key) + ':' + f(39), str(value))
 
 # do an HTTP request to location
 def http_request(location:dict) -> http.client.HTTPResponse:
@@ -332,10 +333,10 @@ def main() -> int:
             text = text.strip().strip('\n')
             while 2*'\n' in text: text = text.replace(2*'\n', '\n')
             if len(text) < 1024:
-                print( f(2) + str(text)  + f(22) )
+                print(f(2) + str(text) + f(22))
             else:
-                print( f(2) + str(text[:1024]) + c(196)+'…'+f(39) + 2*'\n'
-                    + c(196)+'…'+f(39) + str(text[-128:]) + f(22))
+                print(f(2) + str(text[:1024]) + c(196) + '…' + f(39) + 2 * '\n'
+                    + c(196) + '…' + f(39) + str(text[-128:]) + f(22))
             # parse HTML payload
             p = TitleParser()
             p.feed(text)
@@ -347,7 +348,7 @@ def main() -> int:
                 title = title.replace(3 * '\x20', 2 * '\x20')
             print_item(('Parsed items', 'Title', c(222) + title + f(39)))
             if p.descr:
-                print_item(('Parsed items', 'Descr', f(3)+c(222) + p.descr + f(39)+f(23)))
+                print_item(('Parsed items', 'Descr', f(3) + c(222) + p.descr + f(39) + f(23)))
             if p.author:
                 print_item(('Parsed items', 'Author', c(222) + p.author + f(39)))
             if p.keywords:
