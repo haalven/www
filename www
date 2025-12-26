@@ -8,6 +8,7 @@ import http.client
 from http.cookies import SimpleCookie
 import socket, ssl, urllib.parse, getpass
 from cryptography import x509
+from cryptography.x509.oid import ExtensionOID
 from base64 import b64encode
 from html.parser import HTMLParser
 from copy import deepcopy
@@ -52,7 +53,7 @@ def print_item(item:tuple):
     if  ((cat == 'Response headers') and (key.lower() =='location')) or \
         ((cat == 'Response headers') and (key.lower() =='server')) or \
         ((cat == 'Response headers') and (key.lower() =='www-authenticate')) or \
-        ((cat == 'Server certificate') and (key.lower() =='subject')) or \
+        ((cat == 'Server certificate') and (key.lower() =='hostname')) or \
         ((cat == 'Socket details') and (key.lower() =='real-peername')) or \
         ((cat == 'Response headers') and (key.lower() =='set-cookie')) or \
         ((cat == 'Request headers') and (key.lower() =='cookie')):
@@ -70,6 +71,10 @@ def get_arguments(my_name:str) -> argparse.Namespace:
                         action='store_true',
                         required=False,
                         help='send cookies')
+    parser.add_argument('--secure',
+                        action='store_true',
+                        required=False,
+                        help='do https')
     return parser.parse_args()
 
 # ask for a target / location
@@ -153,8 +158,26 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             print_item(('Server certificate', 'Subject', cert.subject.rfc4514_string()))
             print_item(('Server certificate', 'Issuer', cert.issuer.rfc4514_string()))
             print_item(('Server certificate', 'Not-after', str(cert.not_valid_after_utc)))
+            # Subject (O)
+            subject = cert.subject.rfc4514_string()
+            subject_items = subject.split(',')
+            for item in subject_items:
+                key, _, value = item.partition('=')
+                if key.upper() == 'O':
+                    print_item(('Parsed cert subject', 'O', c(154) + value + f(39)))
+            # Subject Alternative Name (SAN)
+            try:
+                san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
+                san_names = san.get_values_for_type(x509.DNSName) # type: ignore
+                san_list = []
+                for name in san_names:
+                    name = c(157) + name + f(39)
+                    san_list.append(name)
+                print_item(('Parsed cert subject', 'SANs', ', '.join(san_list)))
+            except:
+                warn('cert error: no SAN found?!')
         else:
-            warn('certificate error: no certificate?!')
+            warn('cert error: no certificate?!')
         # request headers
         request_headers = {}
         request_headers['User-Agent'] = useragents['Mac-Safari']
@@ -185,9 +208,11 @@ class TitleParser(HTMLParser):
         self.in_title = False
         self.in_descr = False
         self.in_author = False
+        self.in_keywords = False
         self.title = ''
         self.descr = ''
         self.author = ''
+        self.keywords = ''
         self.meta = []
     def handle_starttag(self, tag, attrs):
         if (tag.lower() == 'title') and (not self.title):
@@ -203,13 +228,19 @@ class TitleParser(HTMLParser):
                     elif (value.lower() == 'author'):
                         if not (self.in_author):
                             self.in_author = True
+                    elif (value.lower() == 'keywords'):
+                        if not (self.in_keywords):
+                            self.in_keywords = True
                 elif (key.lower() == 'content') and value:
                     if self.in_descr:
                         self.descr = value.strip()
                     elif self.in_author:
                         self.author = value.strip()
+                    elif self.in_keywords:
+                        self.keywords = value.strip()
             self.in_descr = False
             self.in_author = False
+            self.in_keywords = False
     def handle_endtag(self, tag):
         if tag.lower() == 'title':
             self.in_title = False
@@ -227,13 +258,15 @@ def main() -> int:
     arguments = get_arguments(my_name)
     url = str(arguments.URL)
     if not (url.lower().startswith('http://') or url.lower().startswith('https://')):
-        url = 'http://' + url
+        url = 'https://' + url if arguments.secure else 'http://' + url
     # parse url -> location dict
     location_parsed = urllib.parse.urlparse(url)
     location = {'scheme':'', 'host':'', 'port':0, 'path':''}
     #scheme
     if location_parsed.scheme:
         location['scheme'] = location_parsed.scheme.lower()
+    elif arguments.secure:
+        location['scheme'] = 'https'
     else:
         location['scheme'] = 'http'
     # host and port
@@ -307,11 +340,13 @@ def main() -> int:
                 except UnicodeDecodeError:
                     warn('error decoding payload: unknown charset')
                     return 1
+            text = text.strip().strip('\n')
+            while 2*'\n' in text: text = text.replace(2*'\n', '\n')
             if len(text) < 1024:
                 print( f(2) + str(text)  + f(22) )
             else:
-                print( f(2) + str(text[:512]) + c(196)+'…'+f(39) + 2*'\n'
-                    + c(196)+'…'+f(39) + str(text[-512:]) + f(22))
+                print( f(2) + str(text[:1024]) + c(196)+'…'+f(39) + 2*'\n'
+                    + c(196)+'…'+f(39) + str(text[-128:]) + f(22))
             # parse HTML payload
             p = TitleParser()
             p.feed(text)
@@ -326,6 +361,12 @@ def main() -> int:
                 print_item(('Parsed items', 'Descr', f(3)+c(222) + p.descr + f(39)+f(23)))
             if p.author:
                 print_item(('Parsed items', 'Author', c(222) + p.author + f(39)))
+            if p.keywords:
+                keywords_list = p.keywords.split(',')
+                keywords = []
+                for keyword in keywords_list:
+                    keywords.append(keyword.strip())
+                print_item(('Parsed items', 'Keywords', f(3)+c(222) + ', '.join(keywords) + f(39)+f(23)))
             for meta_tag in p.meta:
                 meta_line = ''
                 for meta_attr in meta_tag:
