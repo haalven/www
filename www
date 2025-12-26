@@ -228,10 +228,6 @@ class TitleParser(HTMLParser):
     def __init__(self):
         super().__init__()
         self.in_title = False
-        self.in_descr = False
-        self.in_author = False
-        self.in_keywords = False
-        self.in_generator = False
         self.title = ''
         self.descr = ''
         self.author = ''
@@ -243,34 +239,20 @@ class TitleParser(HTMLParser):
             self.in_title = True
         elif (tag.lower() == 'meta') and attrs:
             self.meta.append(attrs)
+            attrdb = {}
             for attr in attrs:
                 key, value = attr
-                if (key.lower() == 'name') and value:
-                    if (value.lower() == 'description'):
-                        if not (self.in_descr):
-                            self.in_descr = True
-                    elif (value.lower() == 'author'):
-                        if not (self.in_author):
-                            self.in_author = True
-                    elif (value.lower() == 'keywords'):
-                        if not (self.in_keywords):
-                            self.in_keywords = True
-                    elif (value.lower() == 'generator'):
-                        if not (self.in_generator):
-                            self.in_generator = True
-                elif (key.lower() == 'content') and value:
-                    if self.in_descr:
-                        self.descr = value.strip()
-                    elif self.in_author:
-                        self.author = value.strip()
-                    elif self.in_keywords:
-                        self.keywords = value.strip()
-                    elif self.in_generator:
-                        self.generator = value.strip()
-            self.in_descr = False
-            self.in_author = False
-            self.in_keywords = False
-            self.in_generator = False
+                attrdb[key] = value
+            if ('name' in attrdb) and ('content' in attrdb):
+                match attrdb['name'].lower():
+                    case 'description':
+                        self.descr = deepcopy(attrdb['content'])
+                    case 'author':
+                        self.author = deepcopy(attrdb['content'])
+                    case 'keywords':
+                        self.keywords = deepcopy(attrdb['content'])
+                    case 'generator':
+                        self.generator = deepcopy(attrdb['content'])
     def handle_endtag(self, tag):
         if tag.lower() == 'title':
             self.in_title = False
@@ -410,6 +392,7 @@ def main() -> int:
 
         # 200 OK
         if response.status == 200:
+            print('OK, done. All cookies crunched.')
             return 0
 
         # 3xx redirect
