@@ -148,19 +148,16 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             place, state, country = ('','','')
             for item in subject_items:
                 key, _, value = item.partition('=')
-                if key.upper() == 'O':
-                    print_item(('Parsed cert items', 'Org', c(154) + value + f(39)))
-                elif key.upper() == 'C':
-                    country = deepcopy(value)
-                elif key.upper() == 'ST':
-                    state = deepcopy(value)
-                elif key.upper() == 'L':
-                    place = deepcopy(value)
+                match key.upper():
+                    case 'O':  print_item(('Parsed cert items', 'Org', c(154) + value + f(39)))
+                    case 'C':  country = deepcopy(value)
+                    case 'ST': state = deepcopy(value)
+                    case 'L':  place = deepcopy(value)
             if place or state or country:
                 loc = []
                 if country: loc.append(country)
-                if state: loc.append(state)
-                if place: loc.append(place)
+                if state:   loc.append(state)
+                if place:   loc.append(place)
                 print_item(('Parsed cert items', 'Place', ' › '.join(loc)))
             # Subject Alternative Name (SAN)
             try:
@@ -232,11 +229,11 @@ class TitleParser(HTMLParser):
                     case 'keywords':    self.keywords =  deepcopy(attrdb['content'])
                     case 'generator':   self.generator = deepcopy(attrdb['content'])
     def handle_endtag(self, tag):
-        if tag.lower() == 'title':
+        if (tag.lower() == 'title'):
             self.in_title = False
     def handle_data(self, data):
-        if self.in_title:
-            self.title += data.strip()
+        if self.in_title and not self.title:
+            self.title = data.strip()
 
 # main program
 def main() -> int:
