@@ -160,6 +160,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             print_item(('Server certificate', 'Not-after', str(cert.not_valid_after_utc)))
             # Subject (O)
             subject = cert.subject.rfc4514_string()
+            while '\\,' in subject: subject = subject.replace('\\,', '﹐')
             subject_items = subject.split(',')
             place, state, country = ('','','')
             for item in subject_items:
@@ -191,6 +192,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
                 warn('cert error: no SAN found?!')
             # Issuer
             issuer = cert.issuer.rfc4514_string()
+            while '\\,' in issuer: issuer = issuer.replace('\\,', '﹐')
             issuer_items = issuer.split(',')
             for item in issuer_items:
                 key, _, value = item.partition('=')
