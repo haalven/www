@@ -161,16 +161,23 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             # Subject (O)
             subject = cert.subject.rfc4514_string()
             subject_items = subject.split(',')
+            place, state, country = ('','','')
             for item in subject_items:
                 key, _, value = item.partition('=')
                 if key.upper() == 'O':
                     print_item(('Parsed cert items', 'Org', c(154) + value + f(39)))
                 elif key.upper() == 'C':
-                    print_item(('Parsed cert items', 'Country', value))
+                    country = deepcopy(value)
                 elif key.upper() == 'ST':
-                    print_item(('Parsed cert items', 'State', value))
+                    state = deepcopy(value)
                 elif key.upper() == 'L':
-                    print_item(('Parsed cert items', 'Locality', value))
+                    place = deepcopy(value)
+            if place or state or country:
+                loc = []
+                if country: loc.append(country)
+                if state: loc.append(state)
+                if place: loc.append(place)
+                print_item(('Parsed cert items', 'Place', ' › '.join(loc)))
             # Subject Alternative Name (SAN)
             try:
                 san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
@@ -188,7 +195,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             for item in issuer_items:
                 key, _, value = item.partition('=')
                 if key.upper() == 'O':
-                    print_item(('Parsed cert items', 'Issuer Org', value))
+                    print_item(('Parsed cert items', 'Issuer', value))
         else:
             warn('cert error: no certificate?!')
         # request headers
@@ -386,10 +393,10 @@ def main() -> int:
                 keywords_list = p.keywords.split(',')
                 keywords = []
                 for keyword in keywords_list:
-                    keywords.append(keyword.strip())
-                print_item(('Parsed items', 'Keywords', f(3)+c(222) + ', '.join(keywords) + f(39)+f(23)))
+                    keywords.append(c(222) + keyword.strip() + f(39))
+                print_item(('Parsed items', 'Keywords', ', '.join(keywords)))
             if p.generator:
-                print_item(('Parsed items', 'Software', c(222) + p.generator + f(39)))
+                print_item(('Parsed items', 'Generator', c(222) + p.generator + f(39)))
             for meta_tag in p.meta:
                 meta_line = ''
                 for meta_attr in meta_tag:
