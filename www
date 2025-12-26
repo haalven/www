@@ -164,7 +164,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             for item in subject_items:
                 key, _, value = item.partition('=')
                 if key.upper() == 'O':
-                    print_item(('Parsed cert subject', 'O', c(154) + value + f(39)))
+                    print_item(('Parsed cert subject', 'Org', c(154) + value + f(39)))
             # Subject Alternative Name (SAN)
             try:
                 san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
