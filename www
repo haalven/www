@@ -240,8 +240,7 @@ class TitleParser(HTMLParser):
         elif (tag.lower() == 'meta') and attrs:
             self.meta.append(attrs)
             attrdb = {}
-            for attr in attrs:
-                key, value = attr
+            for key, value in attrs:
                 attrdb[key] = value
             if ('name' in attrdb) and ('content' in attrdb):
                 match attrdb['name'].lower():
@@ -384,7 +383,8 @@ def main() -> int:
                     meta_line += f'{c(230)}{meta_key}{f(39)}={meta_value} '
                 print_item(('Meta tags', 'Meta', meta_line))
 
-
+        # at this point the payload has been processed,
+        # now quit, or prepare the next request…
 
         # 200 OK
         if response.status == 200:
@@ -394,7 +394,6 @@ def main() -> int:
         # 3xx redirect
         elif (response.status in redirect_codes) and response.getheader('location'):
             response_location_parsed = urllib.parse.urlparse(str(response.getheader('location')))
-
             # set the scheme
             response_scheme = str(response_location_parsed.scheme).lower()
             if response_scheme:
@@ -409,18 +408,15 @@ def main() -> int:
                     else:
                         warn(f'scheme "{response_scheme}" not supported')
                         return 1
-
             # set the port
             if response_location_parsed.port:
                 location['port'] = response_location_parsed.port
             # port in netloc (www.foobar.net:8080)
             if ':' in str(response_location_parsed.netloc):
                 _, __, location['port'] = str(response_location_parsed.netloc).partition(':')
-
             # set the hostname
             if response_location_parsed.hostname:
                 location['host'] = str(response_location_parsed.hostname).lower()
-
             # set the path
             if response_location_parsed.path:
                 path = str(response_location_parsed.path)
@@ -433,7 +429,7 @@ def main() -> int:
             if response_location_parsed.fragment:
                 path += '#' + str(response_location_parsed.fragment)
             location['path'] = path
-
+ 
         # error statuscode?
         else:
             return 1
