@@ -77,24 +77,6 @@ def get_arguments(my_name:str) -> argparse.Namespace:
                         help='do https')
     return parser.parse_args()
 
-# ask for a target / location
-def ask_location() -> dict:
-    location = {'scheme':'', 'host':'', 'port':0, 'path':''}
-    while not (location['scheme'] in schemes):
-        location['scheme'] = input('Scheme: ').strip().lower()
-    while not location['host']:
-        location['host'] = input('Host: ').strip().lower()
-    while not location['port']:
-        try:
-            location['port'] = int(input('Port: ').strip())
-        except ValueError:
-            pass
-    location['path'] = input('Path: ').strip()
-    if not location['path']:
-        location['path'] = '/'
-    # return the dictionary
-    return location
-
 # do an HTTP request to location
 def http_request(location:dict) -> http.client.HTTPResponse:
     global cookiedb
