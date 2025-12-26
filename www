@@ -229,11 +229,11 @@ class TitleParser(HTMLParser):
         super().__init__()
         self.in_title = False
         self.title = ''
+        self.meta = []
         self.descr = ''
         self.author = ''
         self.keywords = ''
         self.generator = ''
-        self.meta = []
     def handle_starttag(self, tag, attrs):
         if (tag.lower() == 'title') and (not self.title):
             self.in_title = True
@@ -245,14 +245,10 @@ class TitleParser(HTMLParser):
                 attrdb[key] = value
             if ('name' in attrdb) and ('content' in attrdb):
                 match attrdb['name'].lower():
-                    case 'description':
-                        self.descr = deepcopy(attrdb['content'])
-                    case 'author':
-                        self.author = deepcopy(attrdb['content'])
-                    case 'keywords':
-                        self.keywords = deepcopy(attrdb['content'])
-                    case 'generator':
-                        self.generator = deepcopy(attrdb['content'])
+                    case 'description': self.descr =     deepcopy(attrdb['content'])
+                    case 'author':      self.author =    deepcopy(attrdb['content'])
+                    case 'keywords':    self.keywords =  deepcopy(attrdb['content'])
+                    case 'generator':   self.generator = deepcopy(attrdb['content'])
     def handle_endtag(self, tag):
         if tag.lower() == 'title':
             self.in_title = False
