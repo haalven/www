@@ -222,10 +222,12 @@ class TitleParser(HTMLParser):
         self.in_descr = False
         self.in_author = False
         self.in_keywords = False
+        self.in_generator = False
         self.title = ''
         self.descr = ''
         self.author = ''
         self.keywords = ''
+        self.generator = ''
         self.meta = []
     def handle_starttag(self, tag, attrs):
         if (tag.lower() == 'title') and (not self.title):
@@ -244,6 +246,9 @@ class TitleParser(HTMLParser):
                     elif (value.lower() == 'keywords'):
                         if not (self.in_keywords):
                             self.in_keywords = True
+                    elif (value.lower() == 'generator'):
+                        if not (self.in_generator):
+                            self.in_generator = True
                 elif (key.lower() == 'content') and value:
                     if self.in_descr:
                         self.descr = value.strip()
@@ -251,9 +256,12 @@ class TitleParser(HTMLParser):
                         self.author = value.strip()
                     elif self.in_keywords:
                         self.keywords = value.strip()
+                    elif self.in_generator:
+                        self.generator = value.strip()
             self.in_descr = False
             self.in_author = False
             self.in_keywords = False
+            self.in_generator = False
     def handle_endtag(self, tag):
         if tag.lower() == 'title':
             self.in_title = False
@@ -380,6 +388,8 @@ def main() -> int:
                 for keyword in keywords_list:
                     keywords.append(keyword.strip())
                 print_item(('Parsed items', 'Keywords', f(3)+c(222) + ', '.join(keywords) + f(39)+f(23)))
+            if p.generator:
+                print_item(('Parsed items', 'Software', c(222) + p.generator + f(39)))
             for meta_tag in p.meta:
                 meta_line = ''
                 for meta_attr in meta_tag:
