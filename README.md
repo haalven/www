@@ -10,4 +10,4 @@ HTTP(S) &amp; HTML investigation with Python standard lib
 - fake User-Agent
 - can process and return cookies
 
-usage: `$ www [--cookies] <URL>`
+usage: `$ www [--secure] [--cookies] <URL>`
