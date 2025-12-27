@@ -12,3 +12,5 @@ HTTP(S) &amp; HTML investigation
 - can process and return cookies
 
 usage: `$ www [--secure] [--cookies] <URL>`
+
+alias: `$ alias ww='www --secure --cookies'`
