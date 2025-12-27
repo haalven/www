@@ -1,6 +1,7 @@
 # www
-HTTP(S) &amp; HTML investigation with Python standard lib
+HTTP(S) &amp; HTML investigation
 
+- required: `pygments`
 - transparent HTTP(S) request and response
 - SSL cert details
 - shows all response headers
