@@ -361,10 +361,10 @@ def main() -> int:
             while 2*'\n' in text: text = text.replace(2*'\n', '\n')
             # print payload
             ansi = highlight(text, HtmlLexer(), Terminal256Formatter(style="monokai"))
-            if len(ansi) < 8192:
+            if len(ansi) < 10000:
                 print(ansi)
             else:
-                print(str(ansi[:8192]) + f(0) + c(196) + '…' + f(39))
+                print(str(ansi[:10000]) + f(0) + c(196) + '…' + f(39))
             # parse HTML payload
             p = TitleParser()
             p.feed(text)
