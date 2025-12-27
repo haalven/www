@@ -1,9 +1,7 @@
-#! /usr/bin/env python3
-
 # HTTP(S) Request / Response investigation
 
 
-import sys, pathlib, argparse
+import sys, pathlib, argparse, re, json
 import http.client
 from http.cookies import SimpleCookie
 import socket, ssl, urllib.parse, getpass
@@ -12,6 +10,10 @@ from cryptography.x509.oid import ExtensionOID
 from base64 import b64encode
 from html.parser import HTMLParser
 from copy import deepcopy
+
+from pygments import highlight
+from pygments.lexers import HtmlLexer
+from pygments.formatters import Terminal256Formatter
 
 
 # some settings
@@ -55,6 +57,16 @@ def get_arguments(my_name:str) -> argparse.Namespace:
                         required=False,
                         help='do https')
     return parser.parse_args()
+
+# format URLs
+def links_fmt(text, FMT1, FMT2):
+    def match_fmt(text, pattern, FMT1, FMT2):
+        p = re.compile(pattern, re.IGNORECASE)
+        def color_str(match):
+            return FMT1 + match.group() + FMT2
+        return p.sub(color_str, text)
+    pattern = r'([a-z0-9][a-z0-9-]{1,63}\.){1,}[a-z]{2,63}'
+    return match_fmt(text, pattern, FMT1, FMT2)
 
 # print key:value pairs
 def print_item(item:tuple):
@@ -235,6 +247,17 @@ class TitleParser(HTMLParser):
         if self.in_title and not self.title:
             self.title = data.strip()
 
+# parse CSP response header
+def parse_csp(header_value:str):
+    policies = []
+    for policy in (p.strip() for p in header_value.split(',') if p.strip()):
+        directives = {}
+        for part in (d.strip() for d in policy.split(';') if d.strip()):
+            name, *rest = part.split(None, 1)   # split on any whitespace
+            directives[name.lower()] = rest[0] if rest else ""
+        policies.append(directives)
+    return policies
+
 # main program
 def main() -> int:
     # my path
@@ -312,6 +335,11 @@ def main() -> int:
                 new_value += cookie_value + '; '
                 new_value += attributes
                 print_item(('Response headers', key, new_value))
+            elif key.lower() == 'content-security-policy':
+                policies = parse_csp(value.strip())
+                indented_policies = json.dumps(policies, indent=2, ensure_ascii=False)
+                formatted_policies = links_fmt(indented_policies,c(222),f(39))
+                print_item(('Response headers', key, formatted_policies))
             else:
                 print_item(('Response headers', key, value))
         if cookiedb:
@@ -329,11 +357,12 @@ def main() -> int:
                     return 1
             text = text.strip().strip('\n')
             while 2*'\n' in text: text = text.replace(2*'\n', '\n')
-            if len(text) < 1024:
-                print(f(2) + str(text) + f(22))
+            # print payload
+            ansi = highlight(text, HtmlLexer(), Terminal256Formatter(style="monokai"))
+            if len(ansi) < 8192:
+                print(ansi)
             else:
-                print(f(2) + str(text[:1024]) + c(196) + '…' + f(39) + 2 * '\n'
-                    + c(196) + '…' + f(39) + str(text[-128:]) + f(22))
+                print(str(ansi[:8192]) + f(0) + c(196) + '…' + f(39))
             # parse HTML payload
             p = TitleParser()
             p.feed(text)
