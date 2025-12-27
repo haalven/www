@@ -1,5 +1,5 @@
 # www
-HTTP(S) &amp; HTML investigation
+HTTP(S) &amp; HTML header investigation
 
 - required: `pygments`
 - transparent HTTP(S) request and response
