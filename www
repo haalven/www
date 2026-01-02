@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /Users/xhalc/python-venv/.venv/bin/python3
 
 # HTTP(S) Request / Response investigation
 
@@ -11,7 +11,7 @@ from cryptography import x509
 from cryptography.x509.oid import ExtensionOID
 from base64 import b64encode
 from html.parser import HTMLParser
-from copy import deepcopy
+from copy import copy
 
 from pygments import highlight
 from pygments.lexers import HtmlLexer
@@ -79,7 +79,7 @@ def print_item(item:tuple):
     cat, key, value = item
     if cat != last_cat:
         print('\n' + f(3) + f(4) + str(cat) + ':' + f(24) + f(23))
-        last_cat = deepcopy(cat)
+        last_cat = copy(cat)
     # highlighted items
     if  ((cat == 'Response headers')   and (key.lower() =='location')) or \
         ((cat == 'Response headers')   and (key.lower() =='server')) or \
@@ -106,7 +106,7 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         #print_item(('Connection details', 'Connection-Obj', connection))
         # request headers
         request_headers = {}
-        request_headers['User-Agent'] = useragents['Mac-Safari']
+        request_headers['User-Agent'] = useragents['foobar']
         if cookiedb:
             cookie_header = '; '.join(f'{m.key}={m.value}' for m in cookiedb.values())
             request_headers['Cookie'] = cookie_header
@@ -118,8 +118,8 @@ def http_request(location:dict) -> http.client.HTTPResponse:
         connection.request('GET', location['path'], headers=request_headers)
         print_item(('Socket details', 'Real-Peername', connection.sock.getpeername()[0]))
         return connection.getresponse()
-    except KeyboardInterrupt:
-        warn('KeyboardInterrupt')
+    except socket.gaierror:
+        warn('Connection error: DNS resolution failed')
         sys.exit(1)
     except Exception as e:
         warn('Connection error: ' + str(e))
@@ -164,9 +164,9 @@ def https_request(location:dict) -> http.client.HTTPResponse:
                 key, _, value = item.partition('=')
                 match key.upper():
                     case 'O':  print_item(('Parsed cert items', 'Org', c(154) + value + f(39)))
-                    case 'C':  country = deepcopy(value)
-                    case 'ST': state = deepcopy(value)
-                    case 'L':  place = deepcopy(value)
+                    case 'C':  country = copy(value)
+                    case 'ST': state = copy(value)
+                    case 'L':  place = copy(value)
             if place or state or country:
                 loc = []
                 if country: loc.append(country)
@@ -196,7 +196,7 @@ def https_request(location:dict) -> http.client.HTTPResponse:
             warn('cert error: no certificate?!')
         # request headers
         request_headers = {}
-        request_headers['User-Agent'] = useragents['Mac-Safari']
+        request_headers['User-Agent'] = useragents['foobar']
         if cookiedb:
             cookie_header = '; '.join(f'{m.key}={m.value}' for m in cookiedb.values())
             request_headers['Cookie'] = cookie_header
@@ -210,8 +210,8 @@ def https_request(location:dict) -> http.client.HTTPResponse:
         # the request
         connection.request('GET', location['path'], headers=request_headers)
         return connection.getresponse()
-    except KeyboardInterrupt:
-        warn('KeyboardInterrupt')
+    except socket.gaierror:
+        warn('Connection error: DNS resolution failed')
         sys.exit(1)
     except Exception as e:
         warn('Connection error: ' + str(e))
@@ -221,13 +221,14 @@ def https_request(location:dict) -> http.client.HTTPResponse:
 class TitleParser(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.in_title = False
-        self.title = ''
-        self.meta = []
-        self.descr = ''
-        self.author = ''
-        self.keywords = ''
+        self.in_title  = False
+        self.title     = ''
+        self.meta      = []
+        self.descr     = ''
+        self.author    = ''
+        self.keywords  = ''
         self.generator = ''
+        self.nitter    = ''
     def handle_starttag(self, tag, attrs):
         if (tag.lower() == 'title'):
             self.in_title = True
@@ -235,13 +236,14 @@ class TitleParser(HTMLParser):
             self.meta.append(attrs)
             attrdb = {}
             for key, value in attrs:
-                attrdb[key] = value
+                attrdb[key.lower()] = value
             if ('name' in attrdb) and ('content' in attrdb):
                 match attrdb['name'].lower():
-                    case 'description': self.descr =     deepcopy(attrdb['content'])
-                    case 'author':      self.author =    deepcopy(attrdb['content'])
-                    case 'keywords':    self.keywords =  deepcopy(attrdb['content'])
-                    case 'generator':   self.generator = deepcopy(attrdb['content'])
+                    case 'description':  self.descr     = copy(attrdb['content'])
+                    case 'author':       self.author    = copy(attrdb['content'])
+                    case 'keywords':     self.keywords  = copy(attrdb['content'])
+                    case 'generator':    self.generator = copy(attrdb['content'])
+                    case 'twitter:site': self.nitter   += attrdb['content'].replace('@','')
     def handle_endtag(self, tag):
         if (tag.lower() == 'title'):
             self.in_title = False
@@ -304,7 +306,7 @@ def main() -> int:
             warn('STOP: new request with same location details as last request:')
             print(location)
             return 1
-        last_location = deepcopy(location)
+        last_location = copy(location)
         new_url = f'{location['scheme']}://{location['host']}:{location['port']}{location['path']}'
         print(f'\n\n\n{f(1)}> REQUEST {f(7)}{f(4)}{new_url}{f(24)}{f(27)}{f(22)}')
         # do request, get response
@@ -333,7 +335,7 @@ def main() -> int:
                     cookiedb.load(value)
                 cookie, _, attributes = value.partition('; ')
                 cookie_name, _, cookie_value = cookie.partition('=')
-                new_value = cookie_name + '='
+                new_value  = cookie_name + '='
                 new_value += cookie_value + '; '
                 new_value += attributes
                 print_item(('Response headers', key, new_value))
@@ -387,6 +389,8 @@ def main() -> int:
                 print_item(('Parsed items', 'Keywords', ', '.join(keywords)))
             if p.generator:
                 print_item(('Parsed items', 'Generator', c(222) + p.generator + f(39)))
+            if p.nitter:
+                print_item(('Parsed items', 'Twitter', c(222) + 'https://xcancel.com/' + p.nitter + f(39)))
             for meta_tag in p.meta:
                 meta_line = ''
                 for meta_attr in meta_tag:
