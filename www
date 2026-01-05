@@ -1,4 +1,4 @@
-#! /Users/xhalc/python-venv/.venv/bin/python3
+#! /usr/bin/env python3
 
 # HTTP(S) Request / Response investigation
 
@@ -385,7 +385,8 @@ def main() -> int:
                 keywords_list = p.keywords.split(',')
                 keywords = []
                 for keyword in keywords_list:
-                    keywords.append(c(222) + keyword.strip() + f(39))
+                    if keyword.strip():
+                        keywords.append(c(222) + keyword.strip() + f(39))
                 print_item(('Parsed items', 'Keywords', ', '.join(keywords)))
             if p.generator:
                 print_item(('Parsed items', 'Generator', c(222) + p.generator + f(39)))
